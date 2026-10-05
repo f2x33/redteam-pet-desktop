@@ -1,6 +1,6 @@
 // ============================================================================
 // gh-publish.mjs —— 在没有 DNS 的环境里把本仓库发布到 GitHub
-//   （从姊妹项目 dsh-redteam-pet 拷来，只改了默认仓库名；本机 hosts 屏蔽 GitHub 的绕法通用）
+//   （从姊妹项目 dsh-redpet 拷来，只改了默认仓库名；本机 hosts 屏蔽 GitHub 的绕法通用）
 // ============================================================================
 // 【为什么需要它】
 //   本机 hosts 把 github.com / api.github.com / githubusercontent.com 等 30 多个域名
@@ -21,7 +21,9 @@
 //
 // 【环境变量】
 //   GH_TOKEN   GitHub 令牌（必填）
-//   GH_REPO    默认 f2x33/redteam-pet
+//   GH_REPO    默认 f2x33/redteam-pet-desktop
+//              ⚠️ 这是本项目的对外标识，别被改名脚本一起改掉
+//                 （姊妹项目 dsh-redpet 那边有 PROTECT 保护表挡这类外部标识）
 //   GH_BRANCH  默认 main
 //   GH_LIST    文件清单路径（默认 out/_gh-files.txt）
 //   GH_MSG     提交说明文件（默认 out/_gh-msg.txt，缺省用内置文案）

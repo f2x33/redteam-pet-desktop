@@ -1,7 +1,7 @@
 // ============================================================================
 // sync-assets.mjs —— 从别处同步 webm 素材进来
 // ============================================================================
-// 素材的唯一真相在 dsh-redteam-pet 插件那边（用 tools/gen-api.mjs + keyscreen.mjs
+// 素材的唯一真相在 dsh-redpet 插件那边（用 tools/gen-api.mjs + keyscreen.mjs
 // 生成、抠像、装包）。这个脚本把那边**已经生效**的那 10 段拷到本应用，
 // 保证桌面版和插件版看到的角色完全一致。
 //
@@ -19,7 +19,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DST = path.join(ROOT, 'assets', 'webm');
 const HOME = process.env.USERPROFILE ?? process.env.HOME ?? '';
 
-const DEFAULT_SRC = path.join(HOME, '.dsh', 'dsh-redteam-pet', 'main-animation', 'webm');
+const DEFAULT_SRC = path.join(HOME, '.dsh', 'dsh-redpet', 'main-animation', 'webm');
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const CHECK = process.argv.includes('--check');

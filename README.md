@@ -4,9 +4,9 @@
 
 **与 DSH 完全无关** —— 不装插件、不连 DSH、不调任何模型 API、**零花费**。
 
-> 姊妹项目：[`dsh-redteam-pet`](https://github.com/f2x33/redteam-pet) 是挂在 DSH 里的插件版；
+> 姊妹项目：[`dsh-redpet`](https://github.com/f2x33/redpet) 是挂在 DSH 里的插件版；
 > 本仓库是**独立桌面版**，两者共用同一套素材，互不依赖。
-> 素材的血统见 dsh-redteam-pet 的 `NOTICE.md`（动画由本项目自行生成；宿主代码改造自 dsh-pet 0.3.5，MIT）。
+> 素材的血统见 dsh-redpet 的 `NOTICE.md`（动画由本项目自行生成；宿主代码改造自 dsh-pet 0.3.5，MIT）。
 
 ---
 
@@ -100,11 +100,11 @@ $env:ELECTRON_EXE="D:\path\to\electron.exe"; node tools\run.mjs
 **加新动作**：把 `xxx.webm`（VP9-alpha 透明 webm，推荐 640×360）丢进 `assets\webm\`，
 然后在上面某个池子里写上 `xxx`，重载配置即可。
 
-**换素材**：用姊妹项目的流水线生成（`dsh-redteam-pet` 的 `tools/gen-api.mjs` + `keyscreen.mjs`），
+**换素材**：用姊妹项目的流水线生成（`dsh-redpet` 的 `tools/gen-api.mjs` + `keyscreen.mjs`），
 再用同步脚本拷过来：
 
 ```powershell
-node tools\sync-assets.mjs          # 从 %USERPROFILE%\.dsh\dsh-redteam-pet\main-animation\webm 同步
+node tools\sync-assets.mjs          # 从 %USERPROFILE%\.dsh\dsh-redpet\main-animation\webm 同步
 node tools\sync-assets.mjs --check  # 只对比不写
 ```
 

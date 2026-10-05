@@ -1,8 +1,10 @@
 {
   "_comment": [
     "红队小队员 · 独立桌面宠物 配置",
-    "这是**默认配置**（只读参考）。用户覆盖文件在 data/config.json（便携模式）或",
-    "%APPDATA%\\redteam-pet\\config.json。改了存盘后：右键宠物 →「重载配置」即生效。",
+    "这是**默认配置**（只读参考）。用户覆盖文件**优先**放 data/config.json（便携模式：",
+    "<exe 所在目录>\\data\\config.json）；只有那里不可写时才回落到",
+    "%APPDATA%\\redteam-pet-desktop\\config.json。改了存盘后：右键宠物 →「重载配置」即生效。",
+    "（拿不准在哪：右键宠物 →「打开配置文件夹」，它会打开实际生效的那个目录。）",
     "动作名必须与 assets/webm/<名字>.webm 逐字一致。"
   ],
 
