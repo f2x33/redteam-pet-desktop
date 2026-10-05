@@ -1,0 +1,13 @@
+# 统一用 LF，避免 core.autocrlf=true 把源码签出成 CRLF（跨平台 diff 会全变）
+* text=auto eol=lf
+
+# 素材与图片按二进制处理
+*.webm binary
+*.png binary
+*.ico binary
+*.exe binary
+*.dll binary
+
+# 这些别做 diff 统计
+package-lock.json -diff linguist-generated
+dist/** linguist-vendored
