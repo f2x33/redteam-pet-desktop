@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <!-- CSP 说明：必须显式允许 style-src pet:，否则外链的 pet.css 会被拦掉
+       （'unsafe-inline' 只管内联样式，不管外链样式表）。踩过一次：CSS 被拦后
+       video 按 640×360 原生尺寸显示，窗口里出现滚动条、角色被裁切。 -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; img-src pet: data:; media-src pet:; style-src pet: 'unsafe-inline'; script-src pet:; connect-src pet:;" />
+  <title>红队小队员</title>
+  <link rel="stylesheet" href="./pet.css" />
+</head>
+<body>
+  <!-- 双 video 交叉淡入：切换动作时不会闪黑，这是循环动画不卡的唯一办法 -->
+  <video id="v0" class="pet-video" playsinline muted preload="auto"></video>
+  <video id="v1" class="pet-video" playsinline muted preload="auto"></video>
+
+  <!-- 气泡：只用于外部接入口 POST /say 推来的文字（本应用自己绝不生成文字） -->
+  <div id="bubble" class="pet-bubble" hidden></div>
+
+  <!-- 命中测试用的离屏画布（缩小到 160×90，够用且几乎不耗性能） -->
+  <canvas id="hit" width="160" height="90" class="pet-hitcanvas"></canvas>
+
+  <script type="module" src="./pet.js"></script>
+</body>
+</html>

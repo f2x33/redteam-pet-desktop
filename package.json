@@ -1,0 +1,23 @@
+{
+  "name": "redteam-pet-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "红队小队员 · 独立 Windows 桌面宠物（透明置顶窗 + 10 段动画 + 本地接入口，不依赖 DSH）",
+  "main": "src/main.js",
+  "type": "module",
+  "scripts": {
+    "start": "node tools/run.mjs",
+    "pack": "node tools/pack-portable.mjs",
+    "sync-assets": "node tools/sync-assets.mjs"
+  },
+  "_comment": [
+    "本应用**不依赖 DSH**，也不用 npm 安装 electron：",
+    "  · 开发运行：node tools/run.mjs（它会找到本机已有的 Electron 运行时）",
+    "  · 打包免安装版：node tools/pack-portable.mjs → dist/redteam-pet/redteam-pet.exe",
+    "devDependencies 只是给编辑器提示用的，npm install 不是必须的。"
+  ],
+  "devDependencies": {
+    "electron": "^43.3.0"
+  },
+  "license": "MIT"
+}

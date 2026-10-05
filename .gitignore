@@ -1,0 +1,22 @@
+# 打包产物（整个文件夹拷走即可运行，不入库）
+dist/
+
+# 运行时数据：用户配置、窗口位置、截图等（每台机器自己生成）
+data/
+
+# npm（本应用不需要 npm install，用本机已有 Electron）
+node_modules/
+package-lock.json
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+*.log
+
+# 截图排查产物
+_screen-*.png
+_win-*.png
+_fixed-*.png
+_capture*.png
