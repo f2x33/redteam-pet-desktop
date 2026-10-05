@@ -52,12 +52,13 @@ $env:ELECTRON_EXE="D:\path\to\electron.exe"; node tools\run.mjs
 | 操作 | 效果 |
 |---|---|
 | **拖拽角色** | 拖着它在桌面上跑（拖的时候播"被鼠标拖拽悬空反馈"） |
-| **左键点一下** | 随机播一个"点击回应"动作（挥手 / 开心跃动），播完回待机 |
-| **右键** | 原生菜单：点播动作 / 重载配置 / 打开配置文件夹 / 隐藏 / 退出 |
+| **左键点一下** | 随机播一个"点击回应"动作（挥手 / 开心跃动），播完回待机；顺口说一句（台词表 `clicks` 池） |
+| **右键** | 原生菜单：点播动作 / **让它说一句** / 重载配置 / 打开配置文件夹 / 隐藏 / 退出 |
 | **双击** | 立刻回待机（打断当前动作） |
 | **滚轮** | 循环切换 10 个动作（调试用） |
-| **托盘图标** | 显示/隐藏、点播动作、退出（关窗口不等于退出） |
+| **托盘图标** | 显示/隐藏、点播动作、让它说一句、退出（关窗口不等于退出） |
 | **桌面其他区域** | **鼠标完全穿透** —— 只有角色本体那一小块能点到 |
+| **不定时** | 自己冒个泡说句话 —— 台词是你手写的预设，**不调模型、不花钱**（见 [`docs/台词配置.md`](docs/台词配置.md)） |
 
 > 「只有角色本体能点到」是按**当前帧的 alpha** 逐像素判定的，不是一个矩形挡在桌面上。
 
@@ -67,10 +68,17 @@ $env:ELECTRON_EXE="D:\path\to\electron.exe"; node tools\run.mjs
 
 改配置有两种方式，效果一样：
 
-- 右键宠物 →「**打开配置文件夹**」，编辑里面的 `config.json`，然后右键 →「**重载配置**」
-- 或直接编辑 `resources\app\assets\config.json`（包内默认值）
+- 右键宠物 →「**打开配置文件夹**」，编辑里面的 `config.json` / `lines.json`，然后右键 →「**重载配置**」
+- 或直接编辑 `resources\app\assets\` 下的同名文件（包内默认值）
 
-| 配置项 | 说明 |
+**两个配置文件：**
+
+| 文件 | 管什么 | 详细说明 |
+|---|---|---|
+| `config.json` | 外观、动作池、权重、接入口、菜单文案 | 下表 |
+| `lines.json` | **台词** —— 不定时自己说的话、被点时说的话、状态话术 | [`docs/台词配置.md`](docs/台词配置.md) |
+
+| `config.json` 配置项 | 说明 |
 |---|---|
 | `pet.size` | 角色宽度（像素）。高度自动按 16:9 算 |
 | `pet.position` | 首次出现的角落与边距（之后记住你的拖拽位置） |
@@ -81,6 +89,13 @@ $env:ELECTRON_EXE="D:\path\to\electron.exe"; node tools\run.mjs
 | `timing.idleMinSec` ~ `idleMaxSec` | 两次随机动作之间的间隔 |
 | `bus` | 本地接入口的开关与端口 |
 | `menu` | 菜单文案 |
+
+> ⚠ **两个文件都必须存成 UTF-8（无 BOM）**。带了 BOM 会导致整份配置被忽略 ——
+> 程序会在日志里明确报出来，但你多半看不到日志，所以：用 VS Code / Notepad++ 存"UTF-8"，
+> **别用 PowerShell 的 `Set-Content -Encoding UTF8`**（它会写 BOM）。
+
+**加台词**：打开 `lines.json`，往 `lines` 数组里加一句就行，重载配置即生效。想立刻听一句验证：
+右键 →「让它说一句」。
 
 **加新动作**：把 `xxx.webm`（VP9-alpha 透明 webm，推荐 640×360）丢进 `assets\webm\`，
 然后在上面某个池子里写上 `xxx`，重载配置即可。
@@ -110,10 +125,12 @@ node tools\sync-assets.mjs --check  # 只对比不写
 | POST | `/state` | `{"state":"working","holdSec":8}` 切语义状态 |
 | POST | `/play` | `{"anim":"写代码","once":true}` 直接播某个动作 |
 | POST | `/say` | `{"text":"...","sec":10}` 冒个气泡（**纯显示，不调模型**） |
+| POST | `/chatter` | `{"kind":"idle"}` 让它从**本地台词表**里随便说一句（同样不调模型） |
 | POST | `/visible` | `{"visible":false}` 显示 / 隐藏 |
 | POST | `/debug/capture` | `{"path":"D:/x.png"}` 让 Electron 把窗口截图落盘（排查/自动化用） |
 
 `state` 取值：`idle` / `thinking` / `working` / `error` / `done`（映射关系在配置的 `animations.states`）。
+推状态时它会**顺带说一句**对应场景的台词（`lines.json` 的 `states` 池）。
 
 **例子 —— 让你的构建脚本在编译时让小队员"忙起来"：**
 
@@ -139,22 +156,25 @@ redteam-pet-desktop/
 ├─ package.json              type:module；main = src/main.js
 ├─ src/
 │  ├─ main.js                主进程：透明置顶窗、鼠标穿透、拖拽、托盘、菜单、接入口挂载
-│  ├─ config.js              配置三层合并 + 数据目录（便携优先）
+│  ├─ config.js              配置三层合并（含台词表）+ 数据目录（便携优先）
 │  ├─ bus.js                 本地 HTTP 接入口
 │  ├─ preload.cjs            contextBridge（渲染进程与主进程唯一的门）
 │  └─ renderer/
 │     ├─ index.html          双 video + 气泡 + 命中测试画布
 │     ├─ pet.css             全透明页面
-│     └─ pet.js              动画播放、alpha 命中测试、鼠标交互
+│     └─ pet.js              动画播放、alpha 命中测试、鼠标交互、台词调度
 ├─ assets/
-│  ├─ config.json            默认配置（带注释说明）
+│  ├─ config.json            默认配置（外形/动作/权重/接入口）
+│  ├─ lines.json             默认台词表（不定时自己说的话，纯本地预设）
 │  ├─ icon.png               托盘图标
 │  └─ webm/                  10 段透明动画
 ├─ tools/
 │  ├─ run.mjs                用本机已有 Electron 启动（无需 npm install）
 │  ├─ pack-portable.mjs      打包免安装目录
 │  └─ sync-assets.mjs        从插件版同步素材
-└─ docs/接入口.md            外部框架接入指南
+└─ docs/
+   ├─ 接入口.md              外部框架接入指南
+   └─ 台词配置.md            台词怎么写、什么时候说、排查
 ```
 
 ---
@@ -175,6 +195,10 @@ redteam-pet-desktop/
    不管外链样式表。踩过一次：CSS 被拦后 video 按 640×360 原生尺寸显示，窗口里出现滚动条、角色被裁切。
 6. **双 video 交叉淡入**：切换动作时复用同一个 `<video>` 必然闪黑，两个轮流当前台才对。
 7. **语义状态生效期间要掐掉待机定时器**，否则随机动作会把状态动画顶掉。
+8. **读配置必须剥掉 UTF-8 BOM**：Node 的 `readFileSync('utf8')` **不会**自动去 BOM，
+   留着它 `JSON.parse` 必炸。而且解析失败**一定要出声**（`console.warn` 写清文件名和原因）——
+   最初这里是静默 `return null`，结果用户改了配置毫无反应，排查了半天。
+   实测触发场景：用 PowerShell 的 `Set-Content -Encoding UTF8` 存了一次 `lines.json`。
 
 ---
 
@@ -186,6 +210,8 @@ redteam-pet-desktop/
 | 角色是黑底不是透明 | webm 不是 VP9-alpha。用 `keyscreen.mjs` 重新抠像，或确认用的是 Chromium 内核（Electron 就是） |
 | 点不到角色 / 整窗挡桌面 | 命中测试退化了。看 `data\_capture.png`，并确认 `assets/webm` 里的素材 alpha 通道没丢 |
 | 接入口连不上 | `GET /state` 里的 `busPort` 是真实端口（被占用会顺延）；或配置里 `bus.enabled=false` 被关掉了 |
+| **改了 `config.json` / `lines.json` 毫无反应** | **九成是文件带了 UTF-8 BOM**（PowerShell 的 `Set-Content -Encoding UTF8`、记事本"UTF-8 带 BOM"都会写），`JSON.parse` 会直接失败、整份配置被忽略。程序会在日志里报出来。存成 **UTF-8 无 BOM** 即可；详见 [`docs/台词配置.md`](docs/台词配置.md) |
+| 它一句话都不说 | `lines.json` 的 `enabled` 是不是 false、`lines` 是不是空；窗口是不是被隐藏了；`intervalMinSec/MaxSec` 是不是太大 |
 | 想彻底退出 | 托盘图标右键 →「退出」；直接关窗口只是隐藏 |
 | 窗口跑到屏幕外了 | 删掉 `data\window.json` 重启，会回到配置指定的角落 |
 

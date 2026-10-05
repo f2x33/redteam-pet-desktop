@@ -1,8 +1,8 @@
 {
   "name": "redteam-pet-desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "红队小队员 · 独立 Windows 桌面宠物（透明置顶窗 + 10 段动画 + 本地接入口，不依赖 DSH）",
+  "description": "红队小队员 · 独立 Windows 桌面宠物（透明置顶窗 + 10 段动画 + 预设台词 + 本地接入口，不依赖 DSH）",
   "main": "src/main.js",
   "type": "module",
   "scripts": {

@@ -12,6 +12,7 @@
 //   POST /state   {state,holdSec} → 切语义状态（idle/thinking/working/error/done）
 //   POST /play    {anim,once}     → 直接播某个动作（名字见 anims）
 //   POST /say     {text,sec}      → 冒个气泡（纯显示，**不调任何模型、不花钱**）
+//   POST /chatter {kind,force}    → 从**本地台词表**里随便说一句（同样不调模型）
 //   POST /visible {visible}       → 显示 / 隐藏
 //   POST /debug/capture {path}    → 让 Electron 把窗口内容截图落盘（排查用）
 //   GET  /anims                   → 素材目录里实际存在的动作名
@@ -109,6 +110,13 @@ export async function startBus(o) {
         o.onVisible(b.visible !== false);
         return send(res, 200, { ok: true, visible: b.visible !== false });
       }
+      if (method === 'POST' && p === '/chatter') {
+        // 让宠物从**本地台词表**里随便说一句（不需要你提供文字，也不调模型）。
+        // kind 可选：idle（默认）/ clicks / thinking / working / error / done
+        const b = await readBody(req);
+        const said = o.onChatter?.(b.kind, b.force !== false);
+        return send(res, 200, { ok: !!said, kind: b.kind ?? 'idle' });
+      }
       if (method === 'POST' && p === '/debug/capture') {
         // 让 Electron 自己把窗口内容截下来落盘。用途：①排查"窗口到底画出来没有"
         // ②以后做自动化验证/缩略图。可选 path 指定输出文件。
@@ -118,7 +126,7 @@ export async function startBus(o) {
       }
       return send(res, 404, {
         message: `未知路由 ${method} ${p}`,
-        routes: ['GET /health', 'GET /state', 'GET /anims', 'POST /state', 'POST /play', 'POST /say', 'POST /visible', 'POST /debug/capture'],
+        routes: ['GET /health', 'GET /state', 'GET /anims', 'POST /state', 'POST /play', 'POST /say', 'POST /chatter', 'POST /visible', 'POST /debug/capture'],
       });
     } catch (e) {
       return send(res, 400, { message: String(e && e.message ? e.message : e) });

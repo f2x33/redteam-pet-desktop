@@ -23,11 +23,15 @@ const hitCtx = hitCanvas.getContext('2d', { willReadFrequently: true });
 // ---- 状态 -------------------------------------------------------------------
 let cfg = null;
 let animations = [];
+let lines = null;          // 台词表（lines.json）：纯本地预设，不定时随机冒泡
 let frontIdx = 0;
 let currentAnim = null;
 let idleTimer = null;
 let stateTimer = null;
 let bubbleTimer = null;
+let chatterTimer = null;   // 下次主动说话的定时器
+let lastInteractionAt = 0; // 上次被点/被拖的时间，用来避让
+const recentLines = [];    // 最近说过的，避免短时间内重复
 let dragging = false;
 let dragMoved = false;
 let downAt = null;
@@ -143,6 +147,9 @@ function applyState(state, holdSec) {
   }
   stateActive = true;
   play(anim, { force: true, state });
+  // 状态是外部推来的，不受"刚被点过就不说话"的限制，直接说
+  lastInteractionAt = Date.now();
+  say(state, { force: true });
   const hold = (Number(holdSec) || cfg?.timing?.stateHoldSec || 6) * 1000;
   stateTimer = setTimeout(() => {
     stateActive = false;
@@ -152,7 +159,80 @@ function applyState(state, holdSec) {
   }, hold);
 }
 
-// ---- 气泡（只显示外部推来的文字，本应用自己不生成任何文字）------------------
+// ---- 台词（纯本地预设，不调任何模型）----------------------------------------
+// 台词全部来自 lines.json，人手写的。这里只负责：挑一句、替换占位符、冒个泡。
+// 没有任何网络请求，所以零花费、零延迟，断网也能说话。
+
+/** 替换 {time} {date} {name} 这类占位符。 */
+function subst(text) {
+  const now = new Date();
+  const p2 = (n) => String(n).padStart(2, '0');
+  return String(text)
+    .replace(/\{time\}/g, `${p2(now.getHours())}:${p2(now.getMinutes())}`)
+    .replace(/\{date\}/g, `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`)
+    .replace(/\{name\}/g, cfg?.pet?.name ?? '红队小队员');
+}
+
+/** 按场景取池子。kind: 'idle' | 'clicks' | 状态名（thinking/working/error/done…） */
+function poolFor(kind) {
+  if (!lines) return [];
+  if (kind === 'idle') {
+    const main = Array.isArray(lines.lines) ? lines.lines.slice() : [];
+    const ln = lines.lateNight;
+    if (ln && ln.enabled !== false && Array.isArray(ln.lines) && ln.lines.length) {
+      const h = new Date().getHours();
+      const from = Number(ln.fromHour ?? 0);
+      const to = Number(ln.toHour ?? 6);
+      const inRange = from <= to ? (h >= from && h < to) : (h >= from || h < to);
+      if (inRange) return main.concat(ln.lines);
+    }
+    return main;
+  }
+  if (kind === 'clicks') return Array.isArray(lines.clicks) ? lines.clicks.slice() : [];
+  const s = lines.states?.[kind];
+  return Array.isArray(s) ? s.slice() : [];
+}
+
+/** 从池子里挑一句，尽量不跟最近说过的重复。 */
+function pickLine(pool) {
+  if (!pool.length) return null;
+  const fresh = pool.filter((l) => !recentLines.includes(l));
+  const use = fresh.length ? fresh : pool;
+  const line = use[Math.floor(Math.random() * use.length)];
+  recentLines.push(line);
+  const keep = Math.max(1, Number(lines?.noRepeat ?? 8));
+  while (recentLines.length > keep) recentLines.shift();
+  return line;
+}
+
+/** 说一句。返回是否真的说了。 */
+function say(kind, opts = {}) {
+  if (!lines || lines.enabled === false) return false;
+  if (document.visibilityState === 'hidden') return false; // 藏起来时别自言自语
+  if (!opts.force) {
+    const quiet = Number(lines.quietAfterInteractionSec ?? 25) * 1000;
+    if (Date.now() - lastInteractionAt < quiet) return false;
+  }
+  const line = pickLine(poolFor(kind));
+  if (!line) return false;
+  showBubble(subst(line), Number(lines.showSec) || 8);
+  return true;
+}
+
+/** 排下一次主动说话：每次说完在 [intervalMinSec, intervalMaxSec] 里随机等。 */
+function scheduleChatter() {
+  clearTimeout(chatterTimer);
+  if (!lines || lines.enabled === false) return;
+  const min = Number(lines.intervalMinSec ?? 90) * 1000;
+  const max = Number(lines.intervalMaxSec ?? 300) * 1000;
+  const delay = Math.max(3000, min + Math.random() * Math.max(0, max - min));
+  chatterTimer = setTimeout(() => {
+    say('idle');
+    scheduleChatter();
+  }, delay);
+}
+
+// ---- 气泡（显示台词；外部也能通过接入口 POST /say 推文字进来）---------------
 function showBubble(text, sec) {
   bubbleEl.textContent = String(text);
   bubbleEl.hidden = false;
@@ -257,11 +337,15 @@ function react() {
   const cd = cfg?.timing?.clickCooldownMs ?? 260;
   if (now - lastClickAt < cd) return;
   lastClickAt = now;
+  lastInteractionAt = now;
   const pool = cfg?.animations?.clicks ?? [];
-  if (!pool.length) return;
   stateActive = false; // 手动交互优先，解除外部状态的锁定
-  play(pick(pool), { once: true });
-  clearTimeout(idleTimer);
+  if (pool.length) {
+    play(pick(pool), { once: true });
+    clearTimeout(idleTimer);
+  }
+  // 被点的时候顺口说一句（clicks 池为空就只说动画不吭声）
+  say('clicks', { force: true });
 }
 
 document.addEventListener('contextmenu', (e) => {
@@ -295,15 +379,27 @@ api.onCommand((msg) => {
   if (msg.type === 'config') {
     cfg = msg.cfg;
     animations = Array.isArray(msg.animations) ? msg.animations : [];
-    log(`配置就绪：${animations.length} 段素材，状态 ${Object.keys(cfg?.animations?.states ?? {}).join('/')}`);
+    lines = msg.lines ?? null;
+    const total = lines ? poolFor('idle').length + poolFor('clicks').length
+      + Object.keys(lines.states ?? {}).reduce((s, k) => s + poolFor(k).length, 0) : 0;
+    log(`配置就绪：${animations.length} 段素材，状态 ${Object.keys(cfg?.animations?.states ?? {}).join('/')}`
+      + `，台词 ${total} 条${lines?.enabled === false ? '（已关闭）' : ''}`);
     const back = idleAnim();
     if (back) play(back, { force: true, state: 'idle' });
     scheduleIdle();
+    scheduleChatter();
     return;
   }
   if (msg.type === 'play') { stateActive = false; play(msg.anim, { once: msg.once, force: true }); scheduleIdle(); return; }
   if (msg.type === 'state') { applyState(msg.state, msg.holdSec); return; }
   if (msg.type === 'say') { showBubble(msg.text, msg.sec); return; }
+  // 菜单「让它说一句」/ 接入口 POST /chatter：忽略避让窗口，立刻说
+  if (msg.type === 'chatter') { say(msg.kind ?? 'idle', { force: msg.force !== false }); scheduleChatter(); return; }
+  // 隐藏/显示时调整：藏起来别自言自语，显示出来后重新排期
+  if (msg.type === 'visible') {
+    if (msg.visible) scheduleChatter(); else clearTimeout(chatterTimer);
+    return;
+  }
 });
 
 api.ready();

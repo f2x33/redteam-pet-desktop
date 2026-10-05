@@ -28,6 +28,7 @@ import {
 
 import {
   APP_ROOT, dataDir, loadConfig, ensureUserConfig, listAnimations, webmDir, userConfigFile,
+  loadLines, ensureUserLines, userLinesFile,
 } from './config.js';
 import { startBus } from './bus.js';
 
@@ -48,6 +49,7 @@ protocol.registerSchemesAsPrivileged([{
 let win = null;
 let tray = null;
 let cfg = null;
+let lines = null; // 台词表（lines.json）：不定时随机冒泡用，纯本地预设，不调模型
 let animations = [];
 let interactive = false;
 let busInfo = null;
@@ -212,6 +214,7 @@ function setInteractive(on) {
 function setVisible(v) {
   if (!win || win.isDestroyed()) return;
   if (v) { win.showInactive(); setInteractive(false); } else { win.hide(); }
+  send({ type: 'visible', visible: !!v }); // 让渲染层据此停/启主动说话
   refreshTrayMenu();
 }
 
@@ -244,10 +247,16 @@ function animSubmenu() {
   }));
 }
 
+/** 「让它说一句」：手点一下立刻随机说一句，用来验证台词表改对了没有。 */
+function sayNowItem(label = '让它说一句') {
+  return { label, click: () => send({ type: 'chatter', force: true }) };
+}
+
 function buildMenuTemplate() {
   const L = cfg.menu ?? {};
   return [
     { label: L.play ?? '点播动作', submenu: animSubmenu() },
+    sayNowItem(),
     { type: 'separator' },
     { label: L.reload ?? '重载配置', click: () => reloadConfig(true) },
     { label: L.openConfig ?? '打开配置文件夹', click: () => shell.openPath(dataDir()) },
@@ -265,6 +274,7 @@ function refreshTrayMenu() {
     { label: visible ? (L.hide ?? '隐藏') : '显示', click: () => setVisible(!visible) },
     { type: 'separator' },
     { label: L.play ?? '点播动作', submenu: animSubmenu() },
+    sayNowItem(),
     { type: 'separator' },
     { label: L.reload ?? '重载配置', click: () => reloadConfig(true) },
     { label: L.openConfig ?? '打开配置文件夹', click: () => shell.openPath(dataDir()) },
@@ -288,16 +298,31 @@ function reloadConfig(fromMenu = false) {
   const { cfg: next } = loadConfig();
   cfg = next;
   animations = listAnimations();
+  lines = loadLines(); // 台词表一起重载
   screen.getAllDisplays(); // 让下面的初始位置用上最新屏幕信息
   if (!cfg.pet.rememberPosition) {
     const { w, h } = windowSize();
     const { x, y } = initialPosition(w, h);
     win?.setPosition(x, y);
   }
-  send({ type: 'config', cfg, animations, fromMenu });
+  send({ type: 'config', cfg, animations, lines, fromMenu });
   if (tray) tray.setToolTip(cfg.pet.name ?? '红队小队员');
   refreshTrayMenu();
-  if (fromMenu) console.log('[pet] 配置已重载');
+  if (fromMenu) {
+    console.log(`[pet] 配置已重载（台词 ${countLines(lines)} 条，来自 ${userLinesFile()}）`);
+  }
+}
+
+/** 数一数台词表里一共多少条，给日志和 /state 用。 */
+function countLines(l) {
+  if (!l) return 0;
+  let n = Array.isArray(l.lines) ? l.lines.length : 0;
+  if (l.lateNight && Array.isArray(l.lateNight.lines)) n += l.lateNight.lines.length;
+  if (l.states && typeof l.states === 'object') {
+    for (const v of Object.values(l.states)) if (Array.isArray(v)) n += v.length;
+  }
+  if (Array.isArray(l.clicks)) n += l.clicks.length;
+  return n;
 }
 
 // ---- IPC --------------------------------------------------------------------
@@ -312,6 +337,7 @@ function wireIpc() {
     const L = cfg.menu ?? {};
     Menu.buildFromTemplate([
       { label: L.play ?? '点播动作', submenu: animSubmenu() },
+      sayNowItem(),
       { type: 'separator' },
       { label: L.reload ?? '重载配置', click: () => reloadConfig(true) },
       { label: L.openConfig ?? '打开配置文件夹', click: () => shell.openPath(dataDir()) },
@@ -321,7 +347,7 @@ function wireIpc() {
     ]).popup({ window: win });
   });
   ipcMain.on('pet:ready', () => {
-    send({ type: 'config', cfg, animations });
+    send({ type: 'config', cfg, animations, lines });
   });
   ipcMain.on('pet:anim', (_e, msg) => {
     currentAnim = msg?.anim ?? null;
@@ -348,6 +374,14 @@ async function startIntegrationBus() {
           visible: !!(win && !win.isDestroyed() && win.isVisible()),
           interactive,
           busPort: busInfo?.port ?? null,
+          // 台词表概况（纯本地预设，不调模型）
+          chatter: {
+            enabled: lines?.enabled !== false,
+            total: countLines(lines),
+            intervalMinSec: lines?.intervalMinSec ?? null,
+            intervalMaxSec: lines?.intervalMaxSec ?? null,
+            file: userLinesFile(),
+          },
           // 下面几项是排查"窗口去哪儿了"用的：坐标、是否置顶、屏幕工作区
           bounds: win && !win.isDestroyed() ? win.getBounds() : null,
           alwaysOnTop: win && !win.isDestroyed() ? win.isAlwaysOnTop() : null,
@@ -373,6 +407,7 @@ async function startIntegrationBus() {
       },
       onPlay: (anim, once) => { currentAnim = anim; send({ type: 'play', anim, once }); },
       onSay: (text, sec) => send({ type: 'say', text, sec }),
+      onChatter: (kind, force) => { send({ type: 'chatter', kind: kind ?? 'idle', force }); return true; },
       onVisible: (v) => setVisible(v),
     });
     console.log(`[pet] 接入口就绪：http://${cfg.bus.host}:${busInfo.port}  （GET /state 看状态）`);
@@ -385,12 +420,16 @@ async function startIntegrationBus() {
 app.whenReady().then(() => {
   registerPetProtocol();
   ensureUserConfig();
+  ensureUserLines();
   const { cfg: c } = loadConfig();
   cfg = c;
+  lines = loadLines();
   animations = listAnimations();
   console.log(`[pet] 配置：${userConfigFile()}`);
   console.log(`[pet] 素材：${animations.length} 段（${webmDir()}）`);
+  console.log(`[pet] 台词：${countLines(lines)} 条${lines?.enabled === false ? '（已关闭）' : ''}（${userLinesFile()}）`);
   if (animations.length === 0) console.error('[pet] 警告：assets/webm 里没有 .webm 素材');
+  if (countLines(lines) === 0) console.warn('[pet] 提示：台词表是空的，宠物不会主动说话');
 
   wireIpc();
   createWindow();
