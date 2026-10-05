@@ -4,6 +4,9 @@ dist/
 # 运行时数据：用户配置、窗口位置、截图等（每台机器自己生成）
 data/
 
+# 发布脚本的临时清单与提交说明
+out/
+
 # npm（本应用不需要 npm install，用本机已有 Electron）
 node_modules/
 package-lock.json
